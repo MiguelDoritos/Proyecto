@@ -21,7 +21,7 @@ const pool = new Pool({
 });
 
 // Conexión MQTT
-const client = mqtt.connect('mqtt://test.mosquitto.org');
+const client = mqtt.connect(process.env.MQTT_BROKER);
 
 // Cola para evitar pérdida de datos
 let insertQueue = [];
