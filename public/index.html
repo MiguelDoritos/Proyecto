@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Monitoreo en Tiempo Real - Calidad del Agua</title>
+
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            background-color: #e0f7fa;
+            color: #333;
+        }
+
+        .navbar {
+            background-color: #0288d1;
+            padding: 15px;
+            display: flex;
+            gap: 20px;
+        }
+
+            .navbar a {
+                color: white;
+                text-decoration: none;
+                font-size: 16px;
+                padding: 10px 16px;
+                border-radius: 6px;
+                transition: background-color 0.3s ease;
+            }
+
+                .navbar a:hover {
+                    background-color: #0277bd;
+                }
+
+        .container {
+            max-width: 1300px;
+            margin: auto;
+            padding: 30px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #0288d1;
+            font-size: 28px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+            .card h2 {
+                color: #0288d1;
+                font-size: 16px;
+                margin-bottom: 10px;
+            }
+
+        .gauge-container {
+            width: 100%;
+            max-width: 220px;
+            height: 160px;
+        }
+
+        .valor-sensor {
+            margin-top: 10px;
+            font-size: 16px;
+            color: #444;
+            font-weight: bold;
+        }
+
+        .registro-fecha {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 18px;
+            color: #0288d1;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <a href="/">Inicio</a>
+        <a href="/historial.html">Historial</a>
+    </div>
+
+    <div class="container">
+        <h1>Medición de Parámetros del Agua en Tiempo Real</h1>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2>Temperatura (°C)</h2>
+                <div id="tempGauge" class="gauge-container"></div>
+                <p id="valor-temp" class="valor-sensor"></p>
+            </div>
+            <div class="card">
+                <h2>pH</h2>
+                <div id="phGauge" class="gauge-container"></div>
+                <p id="valor-ph" class="valor-sensor"></p>
+            </div>
+            <div class="card">
+                <h2>TDS (ppm)</h2>
+                <div id="tdsGauge" class="gauge-container"></div>
+                <p id="valor-tds" class="valor-sensor"></p>
+            </div>
+            <div class="card">
+                <h2>Turbidez (NTU)</h2>
+                <div id="turbGauge" class="gauge-container"></div>
+                <p id="valor-turb" class="valor-sensor"></p>
+            </div>
+            <div class="card">
+                <h2>Nivel de Agua (%)</h2>
+                <div id="nivelGauge" class="gauge-container"></div>
+                <p id="valor-nivel" class="valor-sensor"></p>
+            </div>
+        </div>
+
+        <!-- Último registro -->
+        <div class="registro-fecha" id="ultimoRegistro">
+            Cargando último registro...
+        </div>
+    </div>
+
+    <script>
+        const gauges = {};
+
+        function crearGauge(id, min, max, unidad, color) {
+            const chart = Highcharts.chart(id, {
+                chart: {
+                    type: 'solidgauge',
+                    height: 160,
+                    backgroundColor: null
+                },
+                title: null,
+                pane: {
+                    center: ['50%', '85%'],
+                    size: '100%',
+                    startAngle: -90,
+                    endAngle: 90,
+                    background: {
+                        backgroundColor: '#eee',
+                        innerRadius: '60%',
+                        outerRadius: '100%',
+                        shape: 'arc'
+                    }
+                },
+                tooltip: { enabled: false },
+                yAxis: {
+                    min: min,
+                    max: max,
+                    stops: [[1, color]],
+                    lineWidth: 0,
+                    tickWidth: 0,
+                    minorTickInterval: null,
+                    tickAmount: 2,
+                    title: { y: -50 },
+                    labels: { y: 16 }
+                },
+                plotOptions: {
+                    solidgauge: {
+                        dataLabels: {
+                            y: 5,
+                            borderWidth: 0,
+                            useHTML: true,
+                            style: { fontSize: '18px' }
+                        }
+                    }
+                },
+                credits: { enabled: false },
+                series: [{
+                    name: unidad,
+                    data: [0],
+                    dataLabels: {
+                        format: `<div style="text-align:center"><span>{y}</span><br/><span style="font-size:12px;opacity:0.6">${unidad}</span></div>`
+                    }
+                }]
+            });
+
+            gauges[id] = chart;
+        }
+
+        crearGauge("tempGauge", -40, 120, "°C", "#ff5733");
+        crearGauge("phGauge", 0, 14, "pH", "#36a2eb");
+        crearGauge("tdsGauge", 0, 2000, "ppm", "#4bc0c0");
+        crearGauge("turbGauge", 0, 3000, "NTU", "#9966ff");
+        crearGauge("nivelGauge", 0, 400, "%", "#ff9f40");
+
+        async function cargarUltimosDatos() {
+            try {
+                const res = await fetch('/api/ultimos-datos');
+                const datos = await res.json();
+
+                let ultimaFecha = '';
+
+                datos.forEach(d => {
+                    const sensor = d.topic.split('/').pop();
+                    const value = parseFloat(d.message);
+
+                    // Obtener la última fecha de todos los sensores
+                    if (!ultimaFecha || new Date(d.fecha_hora) > new Date(ultimaFecha)) {
+                        ultimaFecha = d.fecha_hora;
+                    }
+
+                    switch (sensor) {
+                        case 'temperature':
+                            gauges["tempGauge"].series[0].setData([value]);
+                            document.getElementById("valor-temp").textContent = `${value} °C`;
+                            break;
+                        case 'ph':
+                            gauges["phGauge"].series[0].setData([value]);
+                            document.getElementById("valor-ph").textContent = `${value} pH`;
+                            break;
+                        case 'tds':
+                            gauges["tdsGauge"].series[0].setData([value]);
+                            document.getElementById("valor-tds").textContent = `${value} ppm`;
+                            break;
+                        case 'turbidity':
+                            gauges["turbGauge"].series[0].setData([value]);
+                            document.getElementById("valor-turb").textContent = `${value} NTU`;
+                            break;
+                        case 'waterlevel':
+                            gauges["nivelGauge"].series[0].setData([value]);
+                            document.getElementById("valor-nivel").textContent = `${value} %`;
+                            break;
+                    }
+                });
+
+                if (ultimaFecha) {
+                    const fechaLocal = new Date(ultimaFecha);
+                    const formateada = fechaLocal.toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "medium"
+                    });
+                    document.getElementById("ultimoRegistro").textContent = `Último registro: ${formateada}`;
+                } else {
+                    document.getElementById("ultimoRegistro").textContent = `No hay registros aún.`;
+                }
+
+            } catch (err) {
+                console.error("❌ Error al cargar últimos datos:", err);
+                document.getElementById("ultimoRegistro").textContent = "Error al obtener fecha del último registro.";
+            }
+        }
+
+        const socket = io();
+        socket.on('sensorData', async (data) => {
+            console.log("📡 Nuevo dato recibido:", data);
+
+            const sensor = data.topic.split('/').pop();
+            const value = parseFloat(data.message);
+
+            switch (sensor) {
+                case 'temperature':
+                    gauges["tempGauge"].series[0].setData([value]);
+                    document.getElementById("valor-temp").textContent = `${value} °C`;
+                    break;
+                case 'ph':
+                    gauges["phGauge"].series[0].setData([value]);
+                    document.getElementById("valor-ph").textContent = `${value} pH`;
+                    break;
+                case 'tds':
+                    gauges["tdsGauge"].series[0].setData([value]);
+                    document.getElementById("valor-tds").textContent = `${value} ppm`;
+                    break;
+                case 'turbidity':
+                    gauges["turbGauge"].series[0].setData([value]);
+                    document.getElementById("valor-turb").textContent = `${value} NTU`;
+                    break;
+                case 'waterlevel':
+                    gauges["nivelGauge"].series[0].setData([value]);
+                    document.getElementById("valor-nivel").textContent = `${value} %`;
+                    break;
+            }
+
+            // Hacer una solicitud para obtener la última medición
+            try {
+                const res = await fetch('/api/ultima-medicion');
+                const ultimaMedicion = await res.json();
+
+                if (ultimaMedicion.fecha_hora) {
+                    const fechaLocal = new Date(ultimaMedicion.fecha_hora);
+                    const formateada = fechaLocal.toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "medium"
+                    });
+
+                    document.getElementById("ultimoRegistro").textContent = `Último registro: ${formateada}`;
+                } else {
+                    document.getElementById("ultimoRegistro").textContent = `No hay registros recientes.`;
+                }
+            } catch (err) {
+                console.error("❌ Error al obtener la última fecha:", err);
+            }
+        });
+
+
+
+
+        window.addEventListener('DOMContentLoaded', cargarUltimosDatos);
+    </script>
+</body>
+</html>

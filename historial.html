@@ -1,0 +1,322 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Sensores</title>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0f7fa;
+            margin: 0;
+            padding: 0;
+        }
+
+        .navbar {
+            background-color: #0288d1;
+            padding: 15px;
+            display: flex;
+            justify-content: flex-start;
+        }
+
+            .navbar a {
+                color: white;
+                text-decoration: none;
+                padding: 14px 20px;
+                font-size: 18px;
+                background-color: #0288d1;
+                border-radius: 5px;
+                transition: background-color 0.3s ease;
+            }
+
+                .navbar a:hover {
+                    background-color: #0277bd;
+                }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        h1 {
+            color: #0288d1;
+            text-align: center;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #0288d1;
+            color: white;
+        }
+
+        .boton {
+            padding: 10px 20px;
+            background-color: #0288d1;
+            color: white;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+            .boton:hover {
+                background-color: #0277bd;
+            }
+
+        input[type="date"] {
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .btn-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <a href="/">Inicio</a>
+        <a href="/historial.html">Historial</a>
+    </div>
+    <div class="container">
+        <h1>Historial de Medición de Parámetros del Agua en Tiempo Real</h1>
+        <div>
+            <label for="fecha">Selecciona una fecha:</label>
+            <input type="date" id="fecha" max="" />
+            <button class="boton" onclick="filtrarPorFecha()">Buscar</button>
+        </div>
+        <div class="btn-container">
+            <button class="boton" onclick="cambiarVista('tabla')">Ver Tabla</button>
+            <button class="boton" onclick="cambiarVista('grafica')">Ver Gráfica</button>
+        </div>
+        <div id="vistaTabla" class="hidden">
+            <h2>Datos en Tablas</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sensor de Temperatura (°C)</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaTemperaturaBody"></tbody>
+            </table>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sensor de pH</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaPhBody"></tbody>
+            </table>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sensor de TDS (ppm)</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaTdsBody"></tbody>
+            </table>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sensor de Turbidez (NTU)</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaTurbidezBody"></tbody>
+            </table>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sensor de Nivel de Agua (%)</th>
+                        <th>Valor</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaNivelAguaBody"></tbody>
+            </table>
+        </div>
+        <div id="vistaGrafica" class="hidden">
+            <h2>Datos en Gráficas</h2>
+            <div id="grafTemp"></div>
+            <div id="grafPh"></div>
+            <div id="grafTds"></div>
+            <div id="grafTurb"></div>
+            <div id="grafNivel"></div>
+        </div>
+        <div id="errorMessage" class="error hidden"></div>
+    </div>
+
+    <script>
+        let datosGlobales = [];
+
+        document.getElementById('fecha').max = new Date().toISOString().split('T')[0];
+
+        async function filtrarPorFecha() {
+            const fecha = document.getElementById('fecha').value;
+            if (!fecha) {
+                alert("Selecciona una fecha válida");
+                return;
+            }
+            try {
+                const res = await fetch(`/api/historial/fecha?fecha=${fecha}`);
+                const datos = await res.json();
+
+                if (datos.length === 0) {
+                    document.getElementById('errorMessage').textContent = "No hay registros para esta fecha.";
+                    document.getElementById('errorMessage').classList.remove('hidden');
+                    limpiarTablas();
+                    return;
+                }
+
+                datosGlobales = datos.map(d => {
+                    const fechaUTC = new Date(d.fecha);
+                    const fechaLocal = new Date(fechaUTC.getTime() - (6 * 60 * 60 * 1000));
+                    return {
+                        ...d,
+                        fecha: fechaLocal.toISOString()
+                    };
+                });
+
+                document.getElementById('errorMessage').classList.add('hidden');
+                cambiarVista('tabla');
+            } catch (err) {
+                console.error("Error al cargar datos:", err);
+                alert(`Error al cargar los datos: ${err.message}`);
+            }
+        }
+
+        function limpiarTablas() {
+            const tablas = ['tablaTemperaturaBody', 'tablaPhBody', 'tablaTdsBody', 'tablaTurbidezBody', 'tablaNivelAguaBody'];
+            tablas.forEach(tabla => {
+                document.getElementById(tabla).innerHTML = '';
+            });
+        }
+
+        function cambiarVista(vista) {
+            document.getElementById('vistaGrafica').classList.toggle('hidden', vista !== 'grafica');
+            document.getElementById('vistaTabla').classList.toggle('hidden', vista !== 'tabla');
+
+            if (vista === 'tabla') mostrarDatosEnTablas();
+            if (vista === 'grafica') cargarGraficas();
+        }
+
+        function mostrarDatosEnTablas() {
+            const sensores = {
+                temperatura: document.getElementById('tablaTemperaturaBody'),
+                ph: document.getElementById('tablaPhBody'),
+                tds: document.getElementById('tablaTdsBody'),
+                turbidez: document.getElementById('tablaTurbidezBody'),
+                nivelAgua: document.getElementById('tablaNivelAguaBody')
+            };
+
+            Object.values(sensores).forEach(tbody => tbody.innerHTML = '');
+
+            datosGlobales.forEach(d => {
+                const fechaFormateada = d.fecha.replace('T', ' ').substring(0, 23);
+                const tipo = d.topico.split('/').pop();
+                const fila = `<tr><td>${nombreSensor(tipo)}</td><td>${parseFloat(d.mensaje)}</td><td>${fechaFormateada}</td></tr>`;
+
+                if (tipo === 'temperature') sensores.temperatura.innerHTML += fila;
+                if (tipo === 'ph') sensores.ph.innerHTML += fila;
+                if (tipo === 'tds') sensores.tds.innerHTML += fila;
+                if (tipo === 'turbidity') sensores.turbidez.innerHTML += fila;
+                if (tipo === 'waterlevel') sensores.nivelAgua.innerHTML += fila;
+            });
+        }
+
+        function nombreSensor(tipo) {
+            const nombres = {
+                'temperature': 'Temperatura (°C)',
+                'ph': 'pH',
+                'tds': 'TDS (ppm)',
+                'turbidity': 'Turbidez (NTU)',
+                'waterlevel': 'Nivel de Agua (%)'
+            };
+            return nombres[tipo] || tipo;
+        }
+
+        function cargarGraficas() {
+            const sensores = { temperature: [], ph: [], tds: [], turbidity: [], waterlevel: [] };
+            datosGlobales.forEach(d => {
+                const fechaMs = new Date(d.fecha).getTime();
+                const tipo = d.topico.split('/').pop();
+                if (sensores[tipo]) sensores[tipo].push([fechaMs, parseFloat(d.mensaje)]);
+            });
+
+            crearGrafica('grafTemp', 'Temperatura (°C)', sensores.temperature, '#ff5733');
+            crearGrafica('grafPh', 'pH', sensores.ph, '#36a2eb');
+            crearGrafica('grafTds', 'TDS (ppm)', sensores.tds, '#4bc0c0');
+            crearGrafica('grafTurb', 'Turbidez (NTU)', sensores.turbidity, '#9966ff');
+            crearGrafica('grafNivel', 'Nivel de Agua (%)', sensores.waterlevel, '#ff9f40');
+        }
+
+        function crearGrafica(id, titulo, data, color) {
+            Highcharts.chart(id, {
+                chart: { type: 'line' },
+                title: { text: titulo },
+                xAxis: {
+                    type: 'datetime',
+                    title: { text: 'Hora' },
+                    labels: { format: '{value:%H:%M:%S}' }
+                },
+                yAxis: { title: { text: titulo } },
+                series: [{
+                    name: titulo,
+                    data: data,
+                    color: color,
+                    marker: {
+                        enabled: true,
+                        symbol: 'circle',
+                        radius: 5
+                    }
+                }]
+            });
+        }
+    </script>
+</body>
+</html>
