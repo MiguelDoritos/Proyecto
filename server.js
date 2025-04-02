@@ -12,12 +12,12 @@ const server = http.createServer(app);
 const io = socketIO(server);
 
 // Configuración de conexión a PostgreSQL
+// Conexión con PostgreSQL usando DATABASE_URL
 const pool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_SERVER,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT || 5432,
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 // Conexión MQTT
