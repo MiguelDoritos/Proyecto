@@ -213,14 +213,17 @@
                     return;
                 }
 
-                datosGlobales = datos.map(d => {
-                    const fechaUTC = new Date(d.fecha);
-                    const fechaLocal = new Date(fechaUTC.getTime() - (6 * 60 * 60 * 1000));
-                    return {
-                        ...d,
-                        fecha: fechaLocal.toISOString()
-                    };
-                });
+                datosGlobales = datos
+                    .filter(d => d.fecha_hora && !isNaN(new Date(d.fecha_hora)))
+                    .map(d => {
+                        const fechaUTC = new Date(d.fecha_hora);
+                        const fechaLocal = new Date(fechaUTC.getTime() - (6 * 60 * 60 * 1000));
+                        return {
+                            ...d,
+                            fecha: fechaLocal.toISOString()
+                        };
+                    });
+
 
                 document.getElementById('errorMessage').classList.add('hidden');
                 cambiarVista('tabla');
