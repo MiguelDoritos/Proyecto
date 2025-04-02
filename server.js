@@ -72,6 +72,9 @@ client.on('message', (topic, message) => {
 
 // Servir frontend
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/historial.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'historial.html'));
+});
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
