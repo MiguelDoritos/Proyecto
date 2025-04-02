@@ -261,7 +261,7 @@
 
             datosGlobales.forEach(d => {
                 const fechaFormateada = d.fecha.replace('T', ' ').substring(0, 23);
-                const tipo = d.topico.split('/').pop();
+                const tipo = d.topic.split('/').pop();
                 const fila = `<tr><td>${nombreSensor(tipo)}</td><td>${parseFloat(d.mensaje)}</td><td>${fechaFormateada}</td></tr>`;
 
                 if (tipo === 'temperature') sensores.temperatura.innerHTML += fila;
