@@ -287,7 +287,7 @@
             const sensores = { temperature: [], ph: [], tds: [], turbidity: [], waterlevel: [] };
             datosGlobales.forEach(d => {
                 const fechaMs = new Date(d.fecha).getTime();
-                const tipo = d.topico.split('/').pop();
+                const tipo = d.topic.split('/').pop();
                 if (sensores[tipo]) sensores[tipo].push([fechaMs, parseFloat(d.mensaje)]);
             });
 
