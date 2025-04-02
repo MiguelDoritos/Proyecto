@@ -61,14 +61,19 @@ client.on('connect', () => {
 });
 
 client.on('message', (topic, message) => {
-    const timestamp = Date.now();
-    const data = { topic, message: message.toString(), timestamp };
+    console.log(`📩 Mensaje recibido: ${topic} - ${message.toString()}`);
 
-    console.log(`📩 Mensaje MQTT: ${topic} - ${data.message}`);
+    const data = {
+        topic,
+        message: message.toString(),
+        timestamp: Date.now()
+    };
+
     io.emit('sensorData', data);
     insertQueue.push(data);
     processQueue();
 });
+
 
 // Servir frontend
 app.use(express.static(path.join(__dirname, 'public')));
