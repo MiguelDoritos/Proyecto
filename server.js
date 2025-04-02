@@ -1,4 +1,6 @@
-﻿const express = require('express');
+﻿require('dotenv').config(); // Cargar variables del .env
+
+const express = require('express');
 const http = require('http');
 const mqtt = require('mqtt');
 const socketIO = require('socket.io');
@@ -9,13 +11,13 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
-// Configuración de conexión a SQL Server
+// Configuración de conexión a SQL Server usando variables del .env
 const config = {
-    user: 'Miguel',
-    password: '123SQL',
-    server: 'localhost',
-    database: 'sensores',
-    port: 54148,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: process.env.DB_SERVER,
+    database: process.env.DB_NAME,
+    port: parseInt(process.env.DB_PORT || '1433'),
     pool: {
         max: 10,
         min: 0,
@@ -37,10 +39,10 @@ pool.on('error', err => {
     console.error('❌ Error en el pool de conexiones SQL:', err);
 });
 
-// Configuración del cliente MQTT
-const client = mqtt.connect('mqtt://192.168.0.137');
+// Conexión al broker MQTT desde variable de entorno
+const client = mqtt.connect(process.env.MQTT_BROKER);
 
-// Cola para evitar perder datos
+// Cola para evitar pérdida de datos
 let insertQueue = [];
 let isProcessingQueue = false;
 
@@ -60,7 +62,6 @@ async function processQueue() {
 async function insertData(topic, message) {
     try {
         await poolConnect;
-
         const insertQuery = `
             INSERT INTO datos (topic, message, fecha_hora)
             VALUES (@topic, @message, SYSDATETIMEOFFSET());
@@ -72,15 +73,15 @@ async function insertData(topic, message) {
 
         console.log('✅ Dato insertado correctamente:', topic, message);
     } catch (err) {
-        console.error(`❌ Error al insertar datos en la base de datos (${topic}):`, err);
+        console.error(`❌ Error al insertar datos (${topic}):`, err);
     }
 }
 
-// Conectar al broker MQTT
+// Conexión al broker MQTT
 client.on('connect', () => {
     client.subscribe('devices/ESP32_001/sensors/#', err => {
         if (err) console.error('❌ Error al suscribirse al tópico:', err);
-        else console.log('📡 Suscripción exitosa al tópico: devices/ESP32_001/sensors/#');
+        else console.log('📡 Suscripción exitosa: devices/ESP32_001/sensors/#');
     });
 });
 
@@ -89,50 +90,50 @@ client.on('message', (topic, message) => {
     const data = { topic, message: message.toString(), timestamp };
 
     console.log(`📩 Mensaje recibido: ${topic} - ${message.toString()} - ${timestamp}`);
-
     io.emit('sensorData', data);
     insertQueue.push(data);
     processQueue();
 });
 
 client.on('error', err => {
-    console.error('❌ Error en la conexión MQTT:', err);
+    console.error('❌ Error MQTT:', err);
 });
 
-// ✅ Ruta para index.html
+// Servir archivos estáticos
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Rutas HTML
 app.get('/', (req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// ✅ Ruta para historial.html
 app.get('/historial.html', (req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.sendFile(path.join(__dirname, 'historial.html'));
 });
 
-// 🔥 API para obtener todo el historial
+// API: historial completo
 app.get('/api/historial', async (req, res) => {
     try {
         await poolConnect;
-        const result = await pool.request()
-            .query(`SELECT topic AS topico, message AS mensaje, fecha_hora AS fecha FROM datos ORDER BY fecha_hora DESC`);
+        const result = await pool.request().query(`
+            SELECT topic AS topico, message AS mensaje, fecha_hora AS fecha
+            FROM datos
+            ORDER BY fecha_hora DESC
+        `);
         res.json(result.recordset);
     } catch (err) {
-        console.error('❌ Error al obtener historial desde la base de datos:', err);
+        console.error('❌ Error al obtener historial:', err);
         res.status(500).send('Error al obtener historial');
     }
 });
 
-// ✅ API para obtener historial por fecha
+// API: historial por fecha
 app.get('/api/historial/fecha', async (req, res) => {
     const fecha = req.query.fecha;
-
     if (!fecha) return res.status(400).send('Falta la fecha');
 
     const fechaInicio = new Date(`${fecha}T00:00:00.000`);
     const fechaFin = new Date(`${fecha}T23:59:59.999`);
-
     if (isNaN(fechaInicio) || isNaN(fechaFin)) {
         return res.status(400).send('Fecha inválida');
     }
@@ -148,16 +149,14 @@ app.get('/api/historial/fecha', async (req, res) => {
                 WHERE fecha_hora BETWEEN @fechaInicio AND @fechaFin
                 ORDER BY fecha_hora DESC
             `);
-
         res.json(result.recordset);
     } catch (err) {
-        console.error('❌ Error al obtener historial por fecha:', err);
-        res.status(500).send('Error al filtrar historial por fecha');
+        console.error('❌ Error al filtrar historial:', err);
+        res.status(500).send('Error al filtrar historial');
     }
 });
 
-// ✅ API para obtener el último dato por cada sensor
-// Obtener los últimos datos por sensor (último dato de cada sensor)
+// API: último dato por sensor
 app.get('/api/ultimos-datos', async (req, res) => {
     try {
         await poolConnect;
@@ -165,19 +164,19 @@ app.get('/api/ultimos-datos', async (req, res) => {
             SELECT topic, message, fecha_hora
             FROM (
                 SELECT topic, message, fecha_hora,
-                       ROW_NUMBER() OVER (PARTITION BY topic ORDER BY fecha_hora DESC) AS rn
+                    ROW_NUMBER() OVER (PARTITION BY topic ORDER BY fecha_hora DESC) AS rn
                 FROM datos
             ) AS sub
             WHERE rn = 1
         `);
         res.json(result.recordset);
     } catch (err) {
-        console.error("❌ Error al obtener últimos datos:", err);
+        console.error("❌ Error últimos datos:", err);
         res.status(500).send('Error al obtener últimos datos');
     }
 });
 
-// Obtener la última medición (último dato registrado en la base de datos)
+// API: última medición global
 app.get('/api/ultima-medicion', async (req, res) => {
     try {
         await poolConnect;
@@ -187,23 +186,15 @@ app.get('/api/ultima-medicion', async (req, res) => {
             ORDER BY fecha_hora DESC
         `);
 
-        if (result.recordset.length > 0) {
-            res.json(result.recordset[0]);
-        } else {
-            res.json({ mensaje: "No se encontraron mediciones." });
-        }
+        res.json(result.recordset.length > 0 ? result.recordset[0] : { mensaje: "No se encontraron mediciones." });
     } catch (err) {
-        console.error("❌ Error al obtener la última medición:", err);
+        console.error("❌ Error última medición:", err);
         res.status(500).send('Error al obtener la última medición');
     }
 });
 
-
-
-// Iniciar el servidor
-const PORT = 3000;
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🌐 Servidor corriendo en http://localhost:${PORT}`);
 });
-
-

@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <title>Monitoreo en Tiempo Real - Calidad del Agua</title>
 
-    <!-- Highcharts -->
     <script src="https://code.highcharts.com/highcharts.js"></script>
     <script src="https://code.highcharts.com/highcharts-more.js"></script>
     <script src="https://code.highcharts.com/modules/solid-gauge.js"></script>
-
-    <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 
     <style>
@@ -53,14 +50,6 @@
             text-align: center;
             color: #0288d1;
             font-size: 28px;
-            margin-bottom: 10px;
-        }
-
-        #ultimaMedicion {
-            text-align: center;
-            font-size: 17px;
-            font-weight: bold;
-            color: #006064;
             margin-bottom: 30px;
         }
 
@@ -98,18 +87,25 @@
             color: #444;
             font-weight: bold;
         }
+
+        .registro-fecha {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 18px;
+            color: #0288d1;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
     <div class="navbar">
-        <a href="/">Inicio</a>
+        <a href="/index.html">Inicio</a>
         <a href="/historial.html">Historial</a>
     </div>
 
     <div class="container">
         <h1>Medición de Parámetros del Agua en Tiempo Real</h1>
-        <p id="ultimaMedicion">Última medición: cargando...</p>
 
         <div class="dashboard">
             <div class="card">
@@ -133,10 +129,15 @@
                 <p id="valor-turb" class="valor-sensor"></p>
             </div>
             <div class="card">
-                <h2>Nivel de Agua (cm)</h2>
+                <h2>Nivel de Agua (%)</h2>
                 <div id="nivelGauge" class="gauge-container"></div>
                 <p id="valor-nivel" class="valor-sensor"></p>
             </div>
+        </div>
+
+        <!-- Último registro -->
+        <div class="registro-fecha" id="ultimoRegistro">
+            Cargando último registro...
         </div>
     </div>
 
@@ -198,27 +199,26 @@
             gauges[id] = chart;
         }
 
-        // Crear los gráficos
         crearGauge("tempGauge", -40, 120, "°C", "#ff5733");
         crearGauge("phGauge", 0, 14, "pH", "#36a2eb");
         crearGauge("tdsGauge", 0, 2000, "ppm", "#4bc0c0");
         crearGauge("turbGauge", 0, 3000, "NTU", "#9966ff");
-        crearGauge("nivelGauge", 0, 400, "cm", "#ff9f40");
+        crearGauge("nivelGauge", 0, 400, "%", "#ff9f40");
 
         async function cargarUltimosDatos() {
             try {
                 const res = await fetch('/api/ultimos-datos');
                 const datos = await res.json();
 
-                let ultimaFecha = null;
+                let ultimaFecha = '';
 
                 datos.forEach(d => {
                     const sensor = d.topic.split('/').pop();
                     const value = parseFloat(d.message);
-                    const fecha = new Date(d.fecha);
 
-                    if (!ultimaFecha || new Date(d.fecha) > new Date(ultimaFecha)) {
-                        ultimaFecha = d.fecha;
+                    // Obtener la última fecha de todos los sensores
+                    if (!ultimaFecha || new Date(d.fecha_hora) > new Date(ultimaFecha)) {
+                        ultimaFecha = d.fecha_hora;
                     }
 
                     switch (sensor) {
@@ -240,33 +240,32 @@
                             break;
                         case 'waterlevel':
                             gauges["nivelGauge"].series[0].setData([value]);
-                            document.getElementById("valor-nivel").textContent = `${value} cm`;
+                            document.getElementById("valor-nivel").textContent = `${value} %`;
                             break;
                     }
                 });
 
                 if (ultimaFecha) {
                     const fechaLocal = new Date(ultimaFecha);
-                    const año = fechaLocal.getFullYear();
-                    const mes = (fechaLocal.getMonth() + 1).toString().padStart(2, '0');
-                    const dia = fechaLocal.getDate().toString().padStart(2, '0');
-                    const horas = fechaLocal.getHours().toString().padStart(2, '0');
-                    const minutos = fechaLocal.getMinutes().toString().padStart(2, '0');
-                    const segundos = fechaLocal.getSeconds().toString().padStart(2, '0');
-
-                    const fechaFormateada = `${año}-${mes}-${dia} ${horas}:${minutos}:${segundos}`;
-                    document.getElementById("ultimaMedicion").textContent = `Última medición: ${fechaFormateada}`;
+                    const formateada = fechaLocal.toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "medium"
+                    });
+                    document.getElementById("ultimoRegistro").textContent = `Último registro: ${formateada}`;
+                } else {
+                    document.getElementById("ultimoRegistro").textContent = `No hay registros aún.`;
                 }
 
             } catch (err) {
                 console.error("❌ Error al cargar últimos datos:", err);
-                document.getElementById("ultimaMedicion").textContent = "❌ No se pudo obtener la última medición.";
+                document.getElementById("ultimoRegistro").textContent = "Error al obtener fecha del último registro.";
             }
         }
 
-        // Conexión socket para datos en tiempo real
         const socket = io();
-        socket.on('sensorData', (data) => {
+        socket.on('sensorData', async (data) => {
+            console.log("📡 Nuevo dato recibido:", data);
+
             const sensor = data.topic.split('/').pop();
             const value = parseFloat(data.message);
 
@@ -289,14 +288,37 @@
                     break;
                 case 'waterlevel':
                     gauges["nivelGauge"].series[0].setData([value]);
-                    document.getElementById("valor-nivel").textContent = `${value} cm`;
+                    document.getElementById("valor-nivel").textContent = `${value} %`;
                     break;
+            }
+
+            // Hacer una solicitud para obtener la última medición
+            try {
+                const res = await fetch('/api/ultima-medicion');
+                const ultimaMedicion = await res.json();
+
+                if (ultimaMedicion.fecha_hora) {
+                    const fechaLocal = new Date(ultimaMedicion.fecha_hora);
+                    const formateada = fechaLocal.toLocaleString("es-MX", {
+                        dateStyle: "short",
+                        timeStyle: "medium"
+                    });
+
+                    document.getElementById("ultimoRegistro").textContent = `Último registro: ${formateada}`;
+                } else {
+                    document.getElementById("ultimoRegistro").textContent = `No hay registros recientes.`;
+                }
+            } catch (err) {
+                console.error("❌ Error al obtener la última fecha:", err);
             }
         });
 
+
+
+
         window.addEventListener('DOMContentLoaded', cargarUltimosDatos);
     </script>
-
 </body>
 </html>
+
 
