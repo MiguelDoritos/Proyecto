@@ -104,7 +104,7 @@ app.get('/api/historial/fecha', async (req, res) => {
 
         res.json(result.rows);
     } catch (err) {
-        res.status(500).send('Error al obtener historial por fecha');
+        res.status(500).json({ error: 'Error al obtener historial por fecha' });
     }
 });
 
