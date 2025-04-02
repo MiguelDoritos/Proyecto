@@ -250,27 +250,31 @@
 
         function mostrarDatosEnTablas() {
             const sensores = {
-                temperatura: document.getElementById('tablaTemperaturaBody'),
+                temperature: document.getElementById('tablaTemperaturaBody'),
                 ph: document.getElementById('tablaPhBody'),
                 tds: document.getElementById('tablaTdsBody'),
-                turbidez: document.getElementById('tablaTurbidezBody'),
-                nivelAgua: document.getElementById('tablaNivelAguaBody')
+                turbidity: document.getElementById('tablaTurbidezBody'),
+                waterlevel: document.getElementById('tablaNivelAguaBody')
             };
 
             Object.values(sensores).forEach(tbody => tbody.innerHTML = '');
 
             datosGlobales.forEach(d => {
                 const fechaFormateada = d.fecha.replace('T', ' ').substring(0, 23);
-                const tipo = d.topic.split('/').pop();
-                const fila = `<tr><td>${nombreSensor(tipo)}</td><td>${parseFloat(d.mensaje)}</td><td>${fechaFormateada}</td></tr>`;
+                const tipo = d.topic?.split('/').pop(); // Asegura que topic exista
+                const valorNumerico = parseFloat(d.message);
 
-                if (tipo === 'temperature') sensores.temperatura.innerHTML += fila;
-                if (tipo === 'ph') sensores.ph.innerHTML += fila;
-                if (tipo === 'tds') sensores.tds.innerHTML += fila;
-                if (tipo === 'turbidity') sensores.turbidez.innerHTML += fila;
-                if (tipo === 'waterlevel') sensores.nivelAgua.innerHTML += fila;
+                if (!isNaN(valorNumerico) && sensores[tipo]) {
+                    const fila = `<tr>
+                <td>${nombreSensor(tipo)}</td>
+                <td>${valorNumerico.toFixed(2)}</td>
+                <td>${fechaFormateada}</td>
+            </tr>`;
+                    sensores[tipo].innerHTML += fila;
+                }
             });
         }
+
 
         function nombreSensor(tipo) {
             const nombres = {
@@ -285,10 +289,15 @@
 
         function cargarGraficas() {
             const sensores = { temperature: [], ph: [], tds: [], turbidity: [], waterlevel: [] };
+
             datosGlobales.forEach(d => {
                 const fechaMs = new Date(d.fecha).getTime();
-                const tipo = d.topic.split('/').pop();
-                if (sensores[tipo]) sensores[tipo].push([fechaMs, parseFloat(d.mensaje)]);
+                const tipo = d.topic?.split('/').pop(); // Protección por si topic no existe
+                const valorNumerico = parseFloat(d.message);
+
+                if (!isNaN(valorNumerico) && sensores[tipo]) {
+                    sensores[tipo].push([fechaMs, valorNumerico]);
+                }
             });
 
             crearGrafica('grafTemp', 'Temperatura (°C)', sensores.temperature, '#ff5733');
@@ -297,6 +306,7 @@
             crearGrafica('grafTurb', 'Turbidez (NTU)', sensores.turbidity, '#9966ff');
             crearGrafica('grafNivel', 'Nivel de Agua (%)', sensores.waterlevel, '#ff9f40');
         }
+
 
         function crearGrafica(id, titulo, data, color) {
             Highcharts.chart(id, {
